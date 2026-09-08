@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>JAGC Question Shuffler</title>
+<title>LPLEC Question Shuffler</title>
 <style>
   :root{
     --paper:#e9ebee; --card:#ffffff; --ink:#16222e; --muted:#5c6874;
@@ -55,15 +55,13 @@
     background:var(--ink);color:#fff;border:1px solid var(--ink);font-weight:600}
   .msg{margin-top:10px;font-size:14px;min-height:20px}
   .msg.bad{color:var(--warn)}
-  footer{margin-top:26px;color:var(--muted);font-size:13px;max-width:74ch}
-  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
 </style>
 </head>
 <body>
 <div class="wrap">
 
 <header>
-  <h1>JAGC question shuffler</h1>
+  <h1>LPLEC question shuffler</h1>
   <p>Draws a random exam set from the question bank, following the selection rule for each booklet. The answer key is encrypted and opens with the grader passphrase.</p>
 </header>
 
@@ -107,10 +105,6 @@
     <pre id="outA" hidden></pre>
   </section>
 </div>
-
-<footer>
-  Selection uses a Fisher–Yates shuffle seeded from <code>crypto.getRandomValues</code> with rejection sampling, so every valid combination is equally likely. The answer key is stored as AES-256-GCM ciphertext and decrypted in your browser; the key is derived with PBKDF2-SHA-256 over 600,000 iterations. Nothing is sent anywhere and nothing is stored between sessions.
-</footer>
 
 </div>
 
