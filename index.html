@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JAGC Question Shuffler</title>
+<style>
+  :root{
+    --paper:#e9ebee; --card:#ffffff; --ink:#16222e; --muted:#5c6874;
+    --rule:#ccd3da; --brass:#7a5c1e; --brass-soft:#f0e7d2; --warn:#8c2f2f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    padding:28px 20px 60px}
+  .wrap{max-width:1120px;margin:0 auto}
+  header{border-bottom:2px solid var(--brass);padding-bottom:14px;margin-bottom:22px}
+  h1{margin:0;font-size:26px;font-weight:650;letter-spacing:-.01em}
+  header p{margin:6px 0 0;color:var(--muted);font-size:14px;max-width:62ch}
+  .tabs{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+  .tab{font:inherit;font-size:14px;padding:8px 16px;cursor:pointer;background:transparent;
+    color:var(--muted);border:1px solid var(--rule);border-radius:3px}
+  .tab[aria-selected="true"]{background:var(--card);color:var(--ink);border-color:var(--brass);font-weight:600}
+  .tab:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+  .brief{background:var(--brass-soft);border-left:3px solid var(--brass);padding:12px 16px;
+    border-radius:0 3px 3px 0;font-size:14px;margin-bottom:18px}
+  .brief span{color:var(--muted)}
+  .controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:20px}
+  button.act{font:inherit;font-size:14px;padding:9px 18px;border-radius:3px;cursor:pointer;
+    border:1px solid var(--rule);background:var(--card);color:var(--ink)}
+  button.act:hover{border-color:var(--brass)}
+  button.primary{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:600}
+  button.primary:hover{background:#25384a;border-color:#25384a}
+  .stamp{color:var(--muted);font-size:13px}
+  .panes{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media (max-width:860px){.panes{grid-template-columns:1fr}}
+  .pane{background:var(--card);border:1px solid var(--rule);border-radius:3px;
+    display:flex;flex-direction:column;min-height:220px}
+  .pane-head{display:flex;justify-content:space-between;align-items:center;gap:10px;
+    padding:11px 14px;border-bottom:1px solid var(--rule)}
+  .pane-head h2{margin:0;font-size:15px;font-weight:650}
+  .pane-head button{font:inherit;font-size:13px;padding:5px 12px;border:1px solid var(--rule);
+    background:transparent;border-radius:3px;cursor:pointer;color:var(--ink)}
+  .pane-head button:hover{border-color:var(--brass)}
+  .pane-head button[hidden]{display:none}
+  pre{margin:0;padding:16px;white-space:pre-wrap;word-wrap:break-word;
+    font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;max-height:62vh;overflow:auto}
+  .empty{color:var(--muted);font-style:italic}
+  .lock{padding:18px 16px}
+  .lock p{margin:0 0 12px;font-size:14px;color:var(--muted);max-width:52ch}
+  .lock form{display:flex;gap:8px;flex-wrap:wrap}
+  .lock input{font:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--rule);
+    border-radius:3px;min-width:230px;flex:1}
+  .lock button{font:inherit;font-size:14px;padding:8px 16px;border-radius:3px;cursor:pointer;
+    background:var(--ink);color:#fff;border:1px solid var(--ink);font-weight:600}
+  .msg{margin-top:10px;font-size:14px;min-height:20px}
+  .msg.bad{color:var(--warn)}
+  footer{margin-top:26px;color:var(--muted);font-size:13px;max-width:74ch}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>JAGC question shuffler</h1>
+  <p>Draws a random exam set from the question bank, following the selection rule for each booklet. The answer key is encrypted and opens with the grader passphrase.</p>
+</header>
+
+<div class="tabs" role="tablist">
+  <button class="tab" role="tab" id="tab-P2" aria-selected="true" onclick="selectBank('P2')">Phase 2 booklet</button>
+  <button class="tab" role="tab" id="tab-P4" aria-selected="false" onclick="selectBank('P4')">Phase 4 booklet</button>
+</div>
+
+<div class="brief" id="brief"></div>
+
+<div class="controls">
+  <button class="act primary" onclick="draw()">Shuffle questions</button>
+  <button class="act" onclick="window.print()">Print</button>
+  <span class="stamp" id="stamp"></span>
+</div>
+
+<div class="panes">
+  <section class="pane">
+    <div class="pane-head">
+      <h2>Question sheet</h2>
+      <button onclick="copyPane('outQ',this)">Copy</button>
+    </div>
+    <pre id="outQ" class="empty">Press “Shuffle questions” to draw a set.</pre>
+  </section>
+
+  <section class="pane">
+    <div class="pane-head">
+      <h2>Answer key</h2>
+      <button id="copyA" hidden onclick="copyPane('outA',this)">Copy</button>
+    </div>
+
+    <div class="lock" id="lock">
+      <p>Graders only. Enter the passphrase to decrypt the answer key. It stays unlocked until you close or reload the page.</p>
+      <form onsubmit="event.preventDefault();unlock()">
+        <input type="password" id="pass" placeholder="Grader passphrase" autocomplete="off" spellcheck="false">
+        <button type="submit" id="unlockBtn">Unlock</button>
+      </form>
+      <div class="msg" id="msg"></div>
+    </div>
+
+    <pre id="outA" hidden></pre>
+  </section>
+</div>
+
+<footer>
+  Selection uses a Fisher–Yates shuffle seeded from <code>crypto.getRandomValues</code> with rejection sampling, so every valid combination is equally likely. The answer key is stored as AES-256-GCM ciphertext and decrypted in your browser; the key is derived with PBKDF2-SHA-256 over 600,000 iterations. Nothing is sent anywhere and nothing is stored between sessions.
+</footer>
+
+</div>
+
+<script>
+const BANKS = {"P2": {"title": "PHASE 2 — QUESTION BOOKLET", "rule": "5 questions from Phase 1 and 5 from Phase 2 — 2 easy, 2 moderate, 1 hard per phase.", "total": 36, "pass": 27, "sections": [{"name": "Phase 1", "picks": [["Easy", 2], ["Moderate", 2], ["Hard", 1]], "pools": {"Easy": [{"id": "P2.0.E.0", "q": "What is the main purpose of the Uniform Code of Military Justice (UCMJ)?", "pts": 2}, {"id": "P2.0.E.1", "q": "Who is responsible for ensuring that personnel comply with Army Regulations in their unit?", "pts": 2}, {"id": "P2.0.E.2", "q": "What does AR 670-1 regulate?", "pts": 2}, {"id": "P2.0.E.3", "q": "Name two areas of military appearance that are regulated by AR 670-1.", "pts": 2}, {"id": "P2.0.E.4", "q": "What does AR 58-1 regulate?", "pts": 2}, {"id": "P2.0.E.5", "q": "What are the three discharge classifications?", "pts": 2}, {"id": "P2.0.E.6", "q": "What are the four categories of charges under the UCMJ?", "pts": 2}, {"id": "P2.0.E.7", "q": "What is the purpose of having the Charges and Specifications section?", "pts": 2}, {"id": "P2.0.E.8", "q": "What's the difference between a Unit Blacklist and an Army-Wide Blacklist?", "pts": 2}, {"id": "P2.0.E.9", "q": "Why must staff understand the UCMJ before taking punitive measures against their personnel?", "pts": 2}], "Moderate": [{"id": "P2.0.M.0", "q": "When applying the UCMJ, what must staff determine beyond simply identifying prohibited conduct?", "pts": 4}, {"id": "P2.0.M.1", "q": "A personnel is repeatedly violating uniform regulations. What responsibilities do Command and Unit Staff have in regard to this situation?", "pts": 4}, {"id": "P2.0.M.2", "q": "According to AR 670-1, what does maintaining a tidy and immaculate military appearance represent?", "pts": 4}, {"id": "P2.0.M.3", "q": "Explain why personnel operating Army vehicles need to understand AR 58-1 rather than simply relying on instructions from others.", "pts": 4}, {"id": "P2.0.M.4", "q": "What factors must staff consider when determining what UCMJ article applies to a violation?", "pts": 4}, {"id": "P2.0.M.5", "q": "What is the distinction between Minor, Moderate, Major, and Capital charges intent to identify while evaluating a UCMJ article violation?", "pts": 4}, {"id": "P2.0.M.6", "q": "What is the purpose of requiring a UCMJ article to be identified when recording a Dishonorable Discharge?", "pts": 4}, {"id": "P2.0.M.7", "q": "Why are Command and Unit Staff responsible for both instructing personnel on regulations and enforcing them?", "pts": 4}, {"id": "P2.0.M.8", "q": "Explain why disciplinary action should correspond to the specific violation committed.", "pts": 4}, {"id": "P2.0.M.9", "q": "Why is it important for all personnel and staff to know their rights when disciplinary action is imposed upon them?", "pts": 4}], "Hard": [{"id": "P2.0.H.0", "q": "A Commanding Officer personally dislikes a subordinate and discovers that the individual committed a minor uniform violation. The officer intends to enforce the harshest punishment available. What should the officer consider in this situation, before imposing a disciplinary action, and how should the rule violation be evaluated? [BE SPECIFIC]", "pts": 6}, {"id": "P2.0.H.1", "q": "A personnel violates a regulation they claim they did not know existed. How should Command and Unit Staff address this case?", "pts": 6}, {"id": "P2.0.H.2", "q": "How could granting personnel authority to enforce the regulations without requiring a sufficient understanding of the UCMJ create problems within the unit?", "pts": 6}, {"id": "P2.0.H.3", "q": "Compare the purpose of a discharge and the purpose of a blacklist. Why are they different forms of disciplinary consequences?", "pts": 6}, {"id": "P2.0.H.4", "q": "A senior officer receives an Honorable Discharge. Explain why an Honorable Discharge does not necessarily prevent changes in their rank.", "pts": 6}, {"id": "P2.0.H.5", "q": "Why might an Army-Wide Blacklist require a higher level of misconduct than a Unit Blacklist?", "pts": 6}, {"id": "P2.0.H.6", "q": "A personnel commits a rule violation that can reasonably fall into more than one category of charge. What should staff consider before deciding which charge to apply?", "pts": 6}, {"id": "P2.0.H.7", "q": "Explain how excessive or incorrect use of disciplinary authority could undermine law and order rather than preserve it.", "pts": 6}, {"id": "P2.0.H.8", "q": "Why does the UCMJ require Command and Unit Staff to use judgment while exercising authority instead of applying punishments face-value?", "pts": 6}, {"id": "P2.0.H.9", "q": "Imagine you are a member of Unit Staff and your subordinate violates a regulation, but the circumstances of the violation and case remain unclear. Describe the steps that you would take before issuing any disciplinary action.", "pts": 6}]}}, {"name": "Phase 2", "picks": [["Easy", 2], ["Moderate", 2], ["Hard", 1]], "pools": {"Easy": [{"id": "P2.1.E.0", "q": "What is the primary role of the Judge Advocate General Corps (JAGC) within the Army Corrections Command?", "pts": 2}, {"id": "P2.1.E.1", "q": "Name the two offices that comprise the Judge Advocate General Corps.", "pts": 2}, {"id": "P2.1.E.2", "q": "What are the two directorates under the Office of Military Appeals?", "pts": 2}, {"id": "P2.1.E.3", "q": "What is the responsibility of the Directorate of Defense during a military appeal?", "pts": 2}, {"id": "P2.1.E.4", "q": "Who bears the burden of establishing their position through evidence and legal arguments before the court?", "pts": 2}, {"id": "P2.1.E.5", "q": "List the two directorates that operate under the Office of Legal Affairs.", "pts": 2}, {"id": "P2.1.E.6", "q": "What is the primary role of a Legal Analyst?", "pts": 2}, {"id": "P2.1.E.7", "q": "In one sentence, describe the responsibility of the Directorate of Judicial Affairs.", "pts": 2}, {"id": "P2.1.E.8", "q": "What are the qualities leaders are expected to have while exercising authority over their subordinates?", "pts": 2}, {"id": "P2.1.E.9", "q": "What constitutes a lawful order within the United States Army?", "pts": 2}], "Moderate": [{"id": "P2.1.M.0", "q": "What is the distinction between the Directorate of Defense and the Directorate of Prosecution during a military appeal?", "pts": 4}, {"id": "P2.1.M.1", "q": "Why does the Defense Attorney not have the responsibility of determining the final outcome of a case?", "pts": 4}, {"id": "P2.1.M.2", "q": "Why must prosecutors support their position with evidence and arguments?", "pts": 4}, {"id": "P2.1.M.3", "q": "How does the Directorate of Legal Analysis contribute to a consistent understanding of the UCMJ?", "pts": 4}, {"id": "P2.1.M.4", "q": "Why must judges base their decisions on facts, evidence, arguments, and regulations?", "pts": 4}, {"id": "P2.1.M.5", "q": "Explain why Legal Analysts can interpret the UCMJ but cannot convict a defendant.", "pts": 4}, {"id": "P2.1.M.6", "q": "Why are JAGC personnel limited to exercising within their assigned positions?", "pts": 4}, {"id": "P2.1.M.7", "q": "What does it mean for JAGC to have jurisdiction over a matter?", "pts": 4}, {"id": "P2.1.M.8", "q": "Why can't JAGC review every disciplinary or administrative action taken against an individual?", "pts": 4}, {"id": "P2.1.M.9", "q": "Explain why a leader's personal disagreement with a subordinate should not influence disciplinary decisions.", "pts": 4}], "Hard": [{"id": "P2.1.H.0", "q": "A Defense Attorney strongly believes their client is guilty but is assigned to defend them. What should the attorney's responsibility be?", "pts": 6}, {"id": "P2.1.H.1", "q": "A prosecutor presents evidence that strongly supports a charge, but the judge believes the evidence is insufficient. Why must the prosecutor accept the judge's decision?", "pts": 6}, {"id": "P2.1.H.2", "q": "A Legal Analyst determines that an article of the UCMJ is ambiguous. What can the analyst do, and what can they not do?", "pts": 6}, {"id": "P2.1.H.3", "q": "A judge personally dislikes the defendant but believes the evidence does not support the charge. What should the judge's decision be, and why?", "pts": 6}, {"id": "P2.1.H.4", "q": "A commander asks a Legal Analyst to convict a personnel after the analyst determines that the personnel violated a UCMJ article. Why would this request exceed the analyst's authority?", "pts": 6}, {"id": "P2.1.H.5", "q": "Explain why separating personal beliefs from professional responsibilities is essential for ethical military leadership.", "pts": 6}, {"id": "P2.1.H.6", "q": "A staff member gives an order that benefits the leader personally but has no legitimate connection to the leader's authority. Explain why this could be considered an improper use of authority.", "pts": 6}, {"id": "P2.1.H.7", "q": "A subordinate refuses to follow an order because they believe the order violates an existing regulation. What should the staff consider before treating the refusal as a UCMJ violation?", "pts": 6}, {"id": "P2.1.H.8", "q": "Why does greater authority create a greater legal and ethical responsibility for a leader?", "pts": 6}, {"id": "P2.1.H.9", "q": "A staff member discovers that one of their subordinates has violated a regulation. The leader is personally angry with the subordinate because of a previous disagreement. Explain how the leader should handle the situation while maintaining professionalism, ethics, and legal responsibility.", "pts": 6}]}}]}, "P4": {"title": "PHASE 4 — ENCOUNTERING THE AUTHORITIES", "rule": "6 questions — 3 from each phase, 1 from each difficulty category.", "total": 24, "pass": 18, "sections": [{"name": "Phase 3", "picks": [["Easy", 1], ["Moderate", 1], ["Hard", 1]], "pools": {"Easy": [{"id": "P4.0.E.0", "q": "What is evidence collection?", "pts": 2}, {"id": "P4.0.E.1", "q": "What is the difference between strict liability crime and fault-based crimes?", "pts": 2}, {"id": "P4.0.E.2", "q": "What are Actus Reus and Mens Rea?", "pts": 2}, {"id": "P4.0.E.3", "q": "What are the four mental states that can establish criminal intent?", "pts": 2}, {"id": "P4.0.E.4", "q": "Name two methods of collecting evidence.", "pts": 2}, {"id": "P4.0.E.5", "q": "What are the three classifications of violations mentioned in the punishment scenarios?", "pts": 2}], "Moderate": [{"id": "P4.0.M.0", "q": "Why does a strict liability crime generally not require proof of intent?", "pts": 4}, {"id": "P4.0.M.1", "q": "What evidence would be needed to prove that someone failed to meet quota?", "pts": 4}, {"id": "P4.0.M.2", "q": "Explain the difference between knowledge and recklessness.", "pts": 4}, {"id": "P4.0.M.3", "q": "Why is fabricating a screenshot a serious offense?", "pts": 4}, {"id": "P4.0.M.4", "q": "Max repeatedly violates uniform regulations after receiving multiple reminders. What punishment is appropriate in this scenario?", "pts": 4}, {"id": "P4.0.M.5", "q": "Truck repeatedly fails to complete his quota despite multiple reminders to do so. What punishment could be suggested in this case, and what could happen if he receives three strikes for the same reason?", "pts": 4}], "Hard": [{"id": "P4.0.H.0", "q": "A personnel member fails to meet their quota but argues that they had no intent of failing. Could they still be punished and why?", "pts": 6}, {"id": "P4.0.H.1", "q": "A staff member receives a screenshot showing their subordinate committed a violation; however, later it was discovered that the evidence was fabricated. What should the staff do in this case and why?", "pts": 6}, {"id": "P4.0.H.2", "q": "Shuu commits major violations against the UCMJ and is clearly identified through an arrest log. He then uses another unit's uniform to cover and confuse people on-base while committing such offenses. Why does this potentially increase the severity of his punishment?", "pts": 6}]}}, {"name": "Phase 4", "picks": [["Easy", 1], ["Moderate", 1], ["Hard", 1]], "pools": {"Easy": [{"id": "P4.1.E.0", "q": "What are the two units within USAR that act as legal authorities?", "pts": 2}, {"id": "P4.1.E.1", "q": "What are the two reasons why JAGC may contact an individual within the USAR?", "pts": 2}, {"id": "P4.1.E.2", "q": "Who is responsible for contacting the plaintiff about the case?", "pts": 2}, {"id": "P4.1.E.3", "q": "What is the purpose of an Inquiry Order?", "pts": 2}, {"id": "P4.1.E.4", "q": "What happens if someone lies while giving a testimony?", "pts": 2}, {"id": "P4.1.E.5", "q": "What are the two qualities a leader should demonstrate when making decisions?", "pts": 2}], "Moderate": [{"id": "P4.1.M.0", "q": "What responsibilities does a plaintiff have when working with their Prosecution Attorney?", "pts": 4}, {"id": "P4.1.M.1", "q": "How is a plaintiff's responsibility different from a witness's responsibility?", "pts": 4}, {"id": "P4.1.M.2", "q": "What should an individual do if they are unable to attend the scheduled court date?", "pts": 4}, {"id": "P4.1.M.3", "q": "What is the difference between how a plaintiff and a witness are treated regarding their Right to Remain Silent?", "pts": 4}, {"id": "P4.1.M.4", "q": "Why should staff remain open to reconsidering a decision when new evidence becomes available?", "pts": 4}, {"id": "P4.1.M.5", "q": "Why can constantly changing decisions because of pressure from others damage a leader's relationship with their staff and personnel?", "pts": 4}], "Hard": [{"id": "P4.1.H.0", "q": "You are a plaintiff in a case, and your Prosecution Attorney contacts you for evidence. You provide them the evidence but later on realize that some of it may be inaccurate. What should you do?", "pts": 6}, {"id": "P4.1.H.1", "q": "You made a disciplinary decision based on the information available to you at that time. Later, strong new evidence suggests that your decision may have been wrong. However, your fellow staff members tell you that changing your decision will make you look weak. What should you do in this case and what would be your reasoning behind it?", "pts": 6}, {"id": "P4.1.H.2", "q": "You are a leader under significant pressure to make a quick disciplinary decision. However, you have limited information and your own staff are giving different accounts of the incident. How should you approach this situation while remaining calm but decisive under pressure?", "pts": 6}]}}]}};
+const SECRET = {"salt": "yUGbsFEd/ELNNs9/gHt9xg==", "iv": "glQC4fiDk9GuTt5i", "ct": "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", "iter": 600000};
+
+/* ---------- unbiased random selection ---------- */
+function randBelow(max){
+  const limit = Math.floor(0x100000000 / max) * max;
+  const buf = new Uint32Array(1);
+  let v;
+  do { crypto.getRandomValues(buf); v = buf[0]; } while (v >= limit);
+  return v % max;
+}
+function take(pool, n){
+  const c = pool.slice();
+  for (let i = c.length - 1; i > 0; i--){
+    const j = randBelow(i + 1);
+    [c[i], c[j]] = [c[j], c[i]];
+  }
+  return c.slice(0, n);
+}
+
+/* ---------- state ---------- */
+let current = 'P2';
+let ANSWERS = null;      // populated only after a successful unlock
+let lastDraw = null;     // {bank, stamp, rows:[{n,diff,item,section}]}
+
+/* ---------- decryption ---------- */
+function b64(s){
+  const bin = atob(s), out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+async function unlock(){
+  const msg = document.getElementById('msg');
+  const btn = document.getElementById('unlockBtn');
+  const pass = document.getElementById('pass').value;
+  if (!pass){ msg.className = 'msg bad'; msg.textContent = 'Enter the passphrase.'; return; }
+  if (!(window.crypto && crypto.subtle)){
+    msg.className = 'msg bad';
+    msg.textContent = 'This browser will not decrypt over an insecure connection. Open the page over https.';
+    return;
+  }
+  btn.disabled = true;
+  msg.className = 'msg';
+  msg.textContent = 'Deriving key — this takes a moment by design…';
+  try {
+    const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+    const key = await crypto.subtle.deriveKey(
+      {name:'PBKDF2', salt:b64(SECRET.salt), iterations:SECRET.iter, hash:'SHA-256'},
+      km, {name:'AES-GCM', length:256}, false, ['decrypt']);
+    const pt = await crypto.subtle.decrypt({name:'AES-GCM', iv:b64(SECRET.iv)}, key, b64(SECRET.ct));
+    ANSWERS = JSON.parse(new TextDecoder().decode(pt));
+    document.getElementById('lock').hidden = true;
+    document.getElementById('outA').hidden = false;
+    document.getElementById('copyA').hidden = false;
+    document.getElementById('pass').value = '';
+    renderAnswers();
+  } catch (e) {
+    msg.className = 'msg bad';
+    msg.textContent = 'That passphrase did not decrypt the key. Check for typos or stray spaces.';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* ---------- rendering ---------- */
+function selectBank(key){
+  current = key;
+  document.getElementById('tab-P2').setAttribute('aria-selected', key === 'P2');
+  document.getElementById('tab-P4').setAttribute('aria-selected', key === 'P4');
+  showBrief();
+  lastDraw = null;
+  const q = document.getElementById('outQ');
+  q.textContent = 'Press “Shuffle questions” to draw a set.';
+  q.className = 'empty';
+  document.getElementById('outA').textContent = '';
+  document.getElementById('stamp').textContent = '';
+}
+function showBrief(){
+  const b = BANKS[current];
+  document.getElementById('brief').innerHTML =
+    '<strong>' + b.rule + '</strong><br><span>Worth ' + b.total +
+    ' points in total. Passing mark is ' + b.pass + '/' + b.total + ' (75%).</span>';
+}
+
+function draw(){
+  const b = BANKS[current];
+  const rows = [];
+  let n = 1;
+  b.sections.forEach((sec, si) => {
+    sec.picks.forEach(pair => {
+      take(sec.pools[pair[0]], pair[1]).forEach(item => {
+        rows.push({n:n++, diff:pair[0], item:item, section:sec.name});
+      });
+    });
+  });
+  lastDraw = {bank:current, stamp:new Date().toLocaleString(), rows:rows};
+
+  const q = document.getElementById('outQ');
+  q.textContent = rows.map(r => r.n + '. ' + r.item.q + ' [' + r.item.pts + ' points]').join('\n');
+  q.className = '';
+  document.getElementById('stamp').textContent = rows.length + ' questions drawn · ' + lastDraw.stamp;
+  renderAnswers();
+}
+
+function renderAnswers(){
+  const out = document.getElementById('outA');
+  if (!ANSWERS) return;
+  if (!lastDraw){ out.textContent = 'Shuffle a set to see its answer key.'; out.className = 'empty'; return; }
+  const b = BANKS[lastDraw.bank];
+  const lines = [
+    b.title,
+    b.rule,
+    'Total: ' + b.total + ' points  |  Pass: ' + b.pass + '/' + b.total + ' (75%)',
+    'Drawn: ' + lastDraw.stamp,
+    '',
+    'ANSWER KEY — GRADER COPY ONLY',
+    ''
+  ];
+  let section = null;
+  lastDraw.rows.forEach(r => {
+    if (r.section !== section){
+      section = r.section;
+      lines.push(section, '-'.repeat(section.length));
+    }
+    lines.push(r.n + '. [' + r.diff + ' — ' + r.item.pts + ' pts] ' + r.item.q);
+    lines.push('   A: ' + (ANSWERS[r.item.id] || '[missing from key — rebuild the file]'));
+    lines.push('');
+  });
+  out.textContent = lines.join('\n').trimEnd();
+  out.className = '';
+}
+
+/* ---------- clipboard ---------- */
+function copyPane(id, btn){
+  const text = document.getElementById(id).textContent;
+  const done = () => { const o = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => btn.textContent = o, 1400); };
+  if (navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(text).then(done).catch(() => fallback(text, done));
+  } else { fallback(text, done); }
+}
+function fallback(text, done){
+  const t = document.createElement('textarea');
+  t.value = text; t.style.position = 'fixed'; t.style.opacity = '0';
+  document.body.appendChild(t); t.select();
+  try { document.execCommand('copy'); done(); } catch(e){ alert('Copy failed — select the text manually.'); }
+  document.body.removeChild(t);
+}
+
+showBrief();
+</script>
+</body>
+</html>
